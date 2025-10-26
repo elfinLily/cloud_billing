@@ -1,1 +1,10 @@
 docs/*
+.env
+.env.local
+prototype/config/gcp_key.json
+prototype/config/aws_credentials.txt
+prototype/data/raw/*
+prototype/logs/*
+__pycache__/
+*.pyc
+.pytest_cache/
