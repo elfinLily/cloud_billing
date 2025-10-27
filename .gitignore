@@ -1,4 +1,5 @@
 docs/*
+FOCUS-Sample-Data/*
 .env
 .env.local
 prototype/config/gcp_key.json
@@ -8,3 +9,4 @@ prototype/logs/*
 __pycache__/
 *.pyc
 .pytest_cache/
+FOCUS-Sample-Data

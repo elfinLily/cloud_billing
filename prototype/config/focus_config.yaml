@@ -1,0 +1,33 @@
+# FOCUS 데이터 분석 설정
+
+# 데이터 경로
+data:
+  raw_path: "data/raw/focus_data_table.csv"
+  sample_path: "data/raw/focus_sample.csv"
+  output_dir: "results"
+
+# 패턴 탐지 임계값
+thresholds:
+  # 패턴 1: 과다 프로비저닝
+  over_provisioning:
+    cpu_threshold: 0.30      # 30% 이하 사용률
+    memory_threshold: 0.30   # 30% 이하 사용률
+    waste_percentage: 50     # 50% 이상 낭비
+  
+  # 패턴 2: 미사용 리소스
+  unused_resources:
+    idle_days: 3             # 3일 이상 미사용
+    stopped_days: 7          # 7일 이상 정지
+    detached_days: 7         # 7일 이상 분리
+
+# 분석 옵션
+analysis:
+  enable_simulation: true    # 시뮬레이션 데이터 생성 여부
+  top_n: 10                  # Top N 결과 표시
+  save_results: true         # 결과 자동 저장
+
+# 로깅
+logging:
+  level: "INFO"
+  file: "logs/focus_analysis.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
