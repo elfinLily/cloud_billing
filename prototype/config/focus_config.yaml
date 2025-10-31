@@ -4,7 +4,20 @@
 data:
   raw_path: "data/raw/focus_data_table.csv"
   sample_path: "data/raw/focus_sample.csv"
+  gcp_raw_path: "data/raw/gcp_cost_dataset.csv"  # GCP Kaggle 데이터
+  gcp_focus_output: "results/gcp_focus_converted.csv"      # FOCUS 변환 결과
   output_dir: "results"
+
+# 클라우드 필터 설정
+cloud_filter:
+  enabled: true           
+  providers:
+    gcp:
+      enabled: true
+      keywords: ["GCP", "Google Cloud", "google"]
+    aws:
+      enabled: true
+      keywords: ["AWS", "Amazon Web Services", "amazon"]
 
 # 패턴 탐지 임계값
 thresholds:
@@ -25,6 +38,27 @@ analysis:
   enable_simulation: true    # 시뮬레이션 데이터 생성 여부
   top_n: 10                  # Top N 결과 표시
   save_results: true         # 결과 자동 저장
+  generate_charts: true      # 차트 자동 생성
+
+  # 패턴별 분석 활성화
+  patterns:
+    over_provisioning:
+      enabled: false          # 과다 프로비저닝 분석 실행 여부
+      save_csv: false         # CSV 저장 여부
+      generate_charts: false  # 차트 생성 여부
+    
+    unused_resources:
+      enabled: true          # 미사용 리소스 분석 실행 여부
+      save_csv: true         # CSV 저장 여부
+      generate_charts: true  # 차트 생성 여부
+
+# 시각화 옵션
+visualization:
+  output_dir: "results/charts"     # 차트 저장 경로
+  style: "preview"                 # preview (다크) 또는 paper (화이트)
+  dpi: 300                         # 해상도
+  formats: ["png", "pdf"]          # 저장 형식
+  top_n_services: 10               # 서비스 Top N
 
 # 로깅
 logging:
