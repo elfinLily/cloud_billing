@@ -4,9 +4,13 @@ FOCUS-Sample-Data/*
 .env.local
 prototype/config/gcp_key.json
 prototype/config/aws_credentials.txt
-prototype/data/raw/*
+prototype/data/raw/focus_data_table.csv
 prototype/logs/*
 __pycache__/
 *.pyc
 .pytest_cache/
 FOCUS-Sample-Data
+prototype/results/charts/*
+prototype/data/raw/gcp_cost_dataset.csv
+prototype/data/processed/aws_focus.csv
+prototype/data/processed/gcp_focus_converted.csv
