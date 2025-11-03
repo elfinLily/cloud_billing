@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 1. 과다 프로비저닝
 2. 미사용 리소스
@@ -207,8 +208,12 @@ class UnusedResourceDetector:
             return None
         
         # 탐지
+        # result = self.df[
+        #     ((self.df['EffectiveCost'] != 0) | (self.df['BilledCost'] != 0))
+        #     (self.df['CommitmentDiscountStatus'].str.lower() == 'unused')
+        # ].copy()
+
         result = self.df[
-            (self.df['EffectiveCost'] != 0) &
             (self.df['CommitmentDiscountStatus'].str.lower() == 'unused')
         ].copy()
         
@@ -249,67 +254,123 @@ class UnusedResourceDetector:
         return result
     
     
+    # def _detect_zero_cost_zero_usage(self):
+    #     """
+    #     조건 2: EffectiveCost == 0 & BilledCost == 0 & (ConsumedQuantity == 0 or null)
+    #     비용도 0, 사용량도 0/null인 불필요한 리소스
+    #     """
+    #     print(f"\n" + "-"*100)
+    #     print("📌 조건 2: EffectiveCost = 0 & BilledCost = 0 & (ConsumedQuantity = 0 or null)")
+    #     print("   (비용도 0, 사용량도 0/null인 불필요한 리소스)")
+    #     print("-"*100)
+        
+    #     # 필요한 컬럼 확인
+    #     required_cols = ['EffectiveCost', 'BilledCost', 'ConsumedQuantity']
+    #     missing_cols = [col for col in required_cols if col not in self.df.columns]
+        
+    #     if missing_cols:
+    #         print(f"❌ 필요한 컬럼 없음: {', '.join(missing_cols)}")
+    #         return None
+        
+    #     # 탐지
+    #     result = self.df[
+    #         (self.df['EffectiveCost'] == 0) &
+    #         (self.df['BilledCost'] == 0) &
+    #         ((self.df['ConsumedQuantity'] == 0) | (self.df['ConsumedQuantity'].isna()))
+    #     ].copy()
+        
+    #     if len(result) == 0:
+    #         print("✅ 없음")
+    #         return None
+        
+    #     # 메타 정보 추가
+    #     result['UnusedReason'] = 'Zero-Cost-Zero-Usage'
+    #     result['WastedCost'] = 0  # 비용은 0이지만 정리 필요
+        
+    #     # 통계 출력
+    #     print(f"\n🚨 발견: {len(result):,}건")
+    #     print(f"⚠️ 비용은 0이지만 불필요한 리소스로 추정 (정리 권장)")
+        
+    #     # ConsumedQuantity 상태별
+    #     null_count = result['ConsumedQuantity'].isna().sum()
+    #     zero_count = (result['ConsumedQuantity'] == 0).sum()
+        
+    #     print(f"\n📊 사용량 상태:")
+    #     print(f"   • null: {null_count:,}건 ({null_count/len(result)*100:.1f}%)")
+    #     print(f"   • 0: {zero_count:,}건 ({zero_count/len(result)*100:.1f}%)")
+        
+    #     # 서비스별
+    #     if 'ServiceName' in result.columns:
+    #         print(f"\n📊 서비스별 Top 5:")
+    #         for service, count in result['ServiceName'].value_counts().head(5).items():
+    #             pct = count / len(result) * 100
+    #             print(f"   • {service[:50]:50s}: {count:,}건 ({pct:.1f}%)")
+        
+    #     # 리소스 타입별
+    #     if 'ResourceType' in result.columns:
+    #         print(f"\n📦 리소스 타입별:")
+    #         for rtype, count in result['ResourceType'].value_counts().items():
+    #             pct = count / len(result) * 100
+    #             print(f"   • {rtype:20s}: {count:,}건 ({pct:.1f}%)")
+        
+    #     return result
+    
     def _detect_zero_cost_zero_usage(self):
         """
-        조건 2: EffectiveCost == 0 & BilledCost == 0 & (ConsumedQuantity == 0 or null)
-        비용도 0, 사용량도 0/null인 불필요한 리소스
+        조건 2: EffectiveCost == 0 & BilledCost == 0 & ConsumedQuantity == 0 (정확히 0만)
+        비용도 0, 사용량도 정확히 0인 불필요한 리소스
         """
         print(f"\n" + "-"*100)
-        print("📌 조건 2: EffectiveCost = 0 & BilledCost = 0 & (ConsumedQuantity = 0 or null)")
-        print("   (비용도 0, 사용량도 0/null인 불필요한 리소스)")
+        print("📌 조건 2: EffectiveCost = 0 & BilledCost = 0 & ConsumedQuantity = 0 (정확히 0)")
+        print("   (비용도 0, 사용량도 정확히 0인 불필요한 리소스)")
         print("-"*100)
-        
+
         # 필요한 컬럼 확인
         required_cols = ['EffectiveCost', 'BilledCost', 'ConsumedQuantity']
         missing_cols = [col for col in required_cols if col not in self.df.columns]
-        
+
         if missing_cols:
             print(f"❌ 필요한 컬럼 없음: {', '.join(missing_cols)}")
             return None
-        
-        # 탐지
+
+        # 탐지 (정확히 0인 것만, null 제외)
+        # result = self.df[
+        #     (self.df['EffectiveCost'] == 0) &
+        #     (self.df['BilledCost'] == 0) &
+        #     (self.df['ConsumedQuantity'] == 0)
+        # ].copy()
+
         result = self.df[
-            (self.df['EffectiveCost'] == 0) &
-            (self.df['BilledCost'] == 0) &
-            ((self.df['ConsumedQuantity'] == 0) | (self.df['ConsumedQuantity'].isna()))
+            (self.df['ConsumedQuantity'] == 0)
         ].copy()
-        
+
         if len(result) == 0:
             print("✅ 없음")
             return None
-        
+
         # 메타 정보 추가
         result['UnusedReason'] = 'Zero-Cost-Zero-Usage'
         result['WastedCost'] = 0  # 비용은 0이지만 정리 필요
-        
+
         # 통계 출력
         print(f"\n🚨 발견: {len(result):,}건")
         print(f"⚠️ 비용은 0이지만 불필요한 리소스로 추정 (정리 권장)")
-        
-        # ConsumedQuantity 상태별
-        null_count = result['ConsumedQuantity'].isna().sum()
-        zero_count = (result['ConsumedQuantity'] == 0).sum()
-        
-        print(f"\n📊 사용량 상태:")
-        print(f"   • null: {null_count:,}건 ({null_count/len(result)*100:.1f}%)")
-        print(f"   • 0: {zero_count:,}건 ({zero_count/len(result)*100:.1f}%)")
-        
+
         # 서비스별
         if 'ServiceName' in result.columns:
             print(f"\n📊 서비스별 Top 5:")
             for service, count in result['ServiceName'].value_counts().head(5).items():
                 pct = count / len(result) * 100
                 print(f"   • {service[:50]:50s}: {count:,}건 ({pct:.1f}%)")
-        
+
         # 리소스 타입별
         if 'ResourceType' in result.columns:
             print(f"\n📦 리소스 타입별:")
             for rtype, count in result['ResourceType'].value_counts().items():
                 pct = count / len(result) * 100
                 print(f"   • {rtype:20s}: {count:,}건 ({pct:.1f}%)")
-        
+
         return result
-    
     
     def _print_results(self, result):
         """최종 결과 출력"""
@@ -368,3 +429,78 @@ class UnusedResourceDetector:
         
         print("\n" + "="*100)
     
+def analyze_patterns(self):
+    """2가지 패턴 분석 (클라우드별 분리)"""
+    if self.df is None:
+        raise ValueError("데이터를 먼저 로드하세요: load_data()")
+    
+    results = {}
+    pattern_config = self.config['analysis']['patterns']
+    cloud_config = self.config.get('cloud_filter', {})
+    
+    # 클라우드 필터 활성화 여부
+    if cloud_config.get('enabled', False):
+        # GCP 데이터 필터링
+        gcp_keywords = cloud_config['providers']['gcp']['keywords']
+        gcp_mask = self.df['ProviderName'].str.contains('|'.join(gcp_keywords), 
+                                                        case=False, na=False)
+        df_gcp = self.df[gcp_mask].copy()
+        
+        # AWS 데이터 필터링
+        aws_keywords = cloud_config['providers']['aws']['keywords']
+        aws_mask = self.df['ProviderName'].str.contains('|'.join(aws_keywords), 
+                                                        case=False, na=False)
+        df_aws = self.df[aws_mask].copy()
+        
+        print(f"\n📊 클라우드별 데이터 분리:")
+        print(f"   • GCP: {len(df_gcp):,}건")
+        print(f"   • AWS: {len(df_aws):,}건")
+        print(f"   • 전체: {len(self.df):,}건")
+        
+        # 클라우드별로 패턴 분석
+        results['gcp'] = self._analyze_cloud_patterns(df_gcp, 'GCP', pattern_config)
+        results['aws'] = self._analyze_cloud_patterns(df_aws, 'AWS', pattern_config)
+        
+    else:
+        # 클라우드 구분 없이 전체 분석 (기존 방식)
+        print("\n⚠️ 클라우드 필터 비활성화 - 전체 데이터 분석")
+        results['all'] = self._analyze_cloud_patterns(self.df, 'ALL', pattern_config)
+    
+    return results
+
+
+def _analyze_cloud_patterns(self, df, cloud_name, pattern_config):
+    """
+    특정 클라우드 데이터의 패턴 분석
+    
+    Args:
+        df: 클라우드별 필터링된 DataFrame
+        cloud_name: 'GCP', 'AWS', 또는 'ALL'
+        pattern_config: 패턴 설정
+    
+    Returns:
+        dict: 패턴별 탐지 결과
+    """
+    results = {}
+    
+    print(f"\n{'='*100}")
+    print(f"🔍 {cloud_name} 데이터 패턴 분석")
+    print(f"{'='*100}")
+    
+    # 패턴 1: 과다 프로비저닝
+    if pattern_config['over_provisioning']['enabled']:
+        print(f"\n🔍 [{cloud_name}] 패턴 1: 과다 프로비저닝 분석")
+        detector1 = OverProvisioningDetector(df, self.config)
+        results['over_provisioned'] = detector1.detect()
+    else:
+        results['over_provisioned'] = pd.DataFrame()
+    
+    # 패턴 2: 미사용 리소스
+    if pattern_config['unused_resources']['enabled']:
+        print(f"\n🔍 [{cloud_name}] 패턴 2: 미사용 리소스 분석")
+        detector2 = UnusedResourceDetector(df, self.config)
+        results['unused'] = detector2.detect()
+    else:
+        results['unused'] = pd.DataFrame()
+    
+    return results
