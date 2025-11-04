@@ -4,28 +4,13 @@
 data:
   raw_path: "data/raw/focus_data_table.csv"
   sample_path: "data/raw/focus_sample.csv"
-<<<<<<< HEAD
-  gcp_raw_path: "data/raw/gcp_cost_dataset.csv"  # GCP Kaggle 데이터
-  gcp_focus_output: "results/gcp_focus_converted.csv"      # FOCUS 변환 결과
-=======
   gcp_raw_path: "data/raw/hf_gcp_billing.csv"
   gcp_focus_output: "data/processed/gcp_focus_converted.csv"
   aws_focus_output: "data/processed/aws_focus.csv"  
->>>>>>> feature/test
   output_dir: "results"
   focus_folder: "data/processed"
+  time_normalized_output: "data/processed/time_normalized.csv"
   detected_patterns_output: "results/detected_patterns.csv.gz" # 최종 결과 저장
-
-# 클라우드 필터 설정
-cloud_filter:
-  enabled: true           
-  providers:
-    gcp:
-      enabled: true
-      keywords: ["GCP", "Google Cloud", "google"]
-    aws:
-      enabled: true
-      keywords: ["AWS", "Amazon Web Services", "amazon"]
 
 # 클라우드 필터 설정
 cloud_filter:
