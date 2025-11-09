@@ -6,12 +6,12 @@
 
 import pandas as pd
 import numpy as np
+from pipeline_base import PipelineBase
 
-
-class OverProvisioningDetector:
+class OverProvisioningDetector(PipelineBase):
     """과다 프로비저닝 탐지기"""
     
-    def __init__(self, df, config):
+    def __init__(self, df=None, config_path='config/focus_config.yaml'):
         """
         초기화
         
@@ -19,10 +19,56 @@ class OverProvisioningDetector:
             df: FOCUS DataFrame
             config: 설정 딕셔너리
         """
-        self.df = df.copy()
-        self.config = config
-        self.threshold = config['thresholds']['over_provisioning']
+        super().__init__(config_path)
+        self.df = df.copy() if df is not None else None
+        self.threshold = self.config['thresholds']['over_provisioning']
+        self.result = None
     
+    def load(self, df=None):
+        """
+        데이터 로드
+
+        Args:
+            df: FOCUS DataFrame (None이면 기존 self.df 사용)
+
+        Returns:
+            self: 체이닝 지원
+        """
+        if df is not None:
+            self.df = df.copy()
+
+        if self.df is None:
+            raise ValueError("❌ 데이터가 없습니다. df를 전달하거나 초기화 시 제공하세요.")
+
+        return self
+
+
+    def process(self):
+        """
+        과다 프로비저닝 탐지 (process는 detect 호출)
+
+        Returns:
+            self: 체이닝 지원
+        """
+        self.result = self.detect()
+        return self
+
+
+    def save(self, output_path=None):
+        """
+        결과 저장 (선택)
+
+        Args:
+            output_path: 저장 경로 (None이면 저장 안 함)
+
+        Returns:
+            self: 체이닝 지원
+        """
+        if output_path and self.result is not None and len(self.result) > 0:
+            self.result.to_csv(output_path, index=False)
+            print(f"✅ 결과 저장: {output_path}")
+
+        return self
     
     def detect(self):
         """
@@ -64,7 +110,8 @@ class OverProvisioningDetector:
             over_prov['PotentialSavings'] = over_prov['BilledCost'] * 0.6
         
         self._print_results(over_prov)
-        
+        self.result = over_prov
+
         return over_prov
     
     
@@ -115,22 +162,85 @@ class OverProvisioningDetector:
         
         print("\n" + "="*100)
 
+    def run(self, df=None):
+        """
+        전체 프로세스 실행 (체이닝)
 
-class UnusedResourceDetector:
+        Args:
+            df: FOCUS DataFrame (선택)
+
+        Returns:
+            self: 체이닝 지원
+        """
+        if df is not None:
+            self.load(df)
+
+        return self.load().process()
+
+
+    def get_results(self):
+        """
+        탐지 결과 반환
+
+        Returns:
+            DataFrame: 탐지된 과다 프로비저닝 리소스
+        """
+        return self.result
+
+
+class UnusedResourceDetector(PipelineBase):
     """미사용 리소스 탐지기"""
     
-    def __init__(self, df, config):
-        """
-        초기화
-        
-        Args:
-            df: FOCUS DataFrame
-            config: 설정 딕셔너리
-        """
-        self.df = df.copy()
-        self.config = config
-    
-    
+    def __init__(self, df=None, config_path='config/focus_config.yaml'):
+            """
+            초기화
+
+            Args:
+                df: FOCUS DataFrame
+                config: 설정 딕셔너리
+            """
+            super().__init__(config_path)
+            self.df = df.copy() if df is not None else None
+            self.result = None
+
+        def load(self, df=None):
+        """데이터 로드"""
+        if df is not None:
+            self.df = df.copy()
+
+        if self.df is None:
+            raise ValueError("❌ 데이터가 없습니다.")
+
+        return self
+
+
+    def process(self):
+        """미사용 리소스 탐지"""
+        self.result = self.detect()
+        return self
+
+
+    def save(self, output_path=None):
+        """결과 저장"""
+        if output_path and self.result is not None and len(self.result) > 0:
+            self.result.to_csv(output_path, index=False)
+            print(f"✅ 결과 저장: {output_path}")
+
+        return self
+
+
+    def run(self, df=None):
+        """전체 프로세스 실행"""
+        if df is not None:
+            self.load(df)
+
+        return self.load().process()
+
+
+    def get_results(self):
+        """탐지 결과 반환"""
+        return self.result
+
     def detect(self):
         """
         미사용 리소스 탐지
@@ -184,9 +294,9 @@ class UnusedResourceDetector:
         
         # 최종 결과 출력
         self._print_results(result)
-        
+        self.result = result
+
         return result
-    
     
     def _detect_commitment_unused(self):
         """

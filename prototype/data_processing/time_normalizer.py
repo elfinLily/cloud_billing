@@ -8,8 +8,9 @@ import yaml
 import polars as pl
 from pathlib import Path
 from datetime import timedelta
+from pipeline_base import PipelineBase
 
-class TimeNormalizer:
+class TimeNormalizer(PipelineBase):
     """
     시간 범위를 1시간 단위로 정규화하는 클래스
     
@@ -30,9 +31,7 @@ class TimeNormalizer:
             df (DataFrame): FOCUS 형식의 청구 데이터
                 필수 컬럼: ChargePeriodStart, ChargePeriodEnd, BilledCost
         """
-        # Config 로드
-        with open(config_path, 'r', encoding='utf-8') as f:
-            self.config = yaml.safe_load(f)
+        super().__init__(config_path)
 
         data_config = self.config['data']
         self.output_path = Path(data_config['time_normalized_output'])
@@ -78,7 +77,6 @@ class TimeNormalizer:
 
         print(f"\n✅ 로드 완료!")
         print(f"   📊 총 레코드: {len(self.df_all):,}건")
-        print(f"   📋 총 컬럼: {len(self.df_all.columns)}개")
 
         return self.df_all
     
@@ -95,6 +93,8 @@ class TimeNormalizer:
             raise ValueError(f"❌ 필수 컬럼 누락: {missing}")
         
         print(f"\n✅ 필수 컬럼 검증 완료: {required_cols}")
+
+        return self
     
     
     def _convert_datetime(self):
@@ -126,6 +126,8 @@ class TimeNormalizer:
             self.df_all = self.df_all.drop_nulls(subset=['ChargePeriodStart', 'ChargePeriodEnd', 'BilledCost'])
 
         print(f"✅ 변환 완료: {len(self.df_all):,}건")
+
+        return self
     
     
     def normalize(self, distribute_cost=True):
@@ -202,6 +204,8 @@ class TimeNormalizer:
         print(f"   평균 확장 배율: {len(self.df_time_normalized) / total_records:.1f}x")
 
         print("="*100)
+
+        return self
     
     
     def get_hourly_summary(self):
@@ -219,10 +223,11 @@ class TimeNormalizer:
             pl.col('HourlyCost').sum().alias('TotalCost'),
             pl.col('HourlyCost').mean().alias('AvgCost')
         ]).sort('HourlyTimestamp')
-        
+        self.summary = summary
+
         print(f"✅ 요약 완료: {len(summary):,}개 시간 슬롯")
         
-        return summary
+        return self
     
     def save(self):
         """
@@ -249,7 +254,7 @@ class TimeNormalizer:
         print(f"   💾 크기: {file_size_mb:.1f} MB")
         print("="*100)
         
-        return self.output_path
+        return self
     
     def run(self):
         """
@@ -258,25 +263,25 @@ class TimeNormalizer:
         Returns:
             tuple: (DataFrame, 요약 통계, 출력 파일 경로)
         """
-        # 1. 로드
-        self.load()
-        
-        # 2. 컬럼 검증 및 타입 변환
-        self._validate_columns()
-        self._convert_datetime()
-        
-        # 3. 변환
-        self.normalize(distribute_cost=True)
+        return (self.load()
+                ._validate_columns()
+                ._convert_datetime()
+                .normalize(distribute_cost=True)
+                .save()
+                .get_hourly_summary())
+    
+    def get_results(self):
+        """
+        분석 결과 반환
 
-        # 4. 저장
-        output_path = self.save()
-        
-        # 5. 요약
-        summary = self.get_hourly_summary()
-        
-        print("\n✅ 모든 작업 완료!\n")
-        
-        return self.df_time_normalized, summary, output_path
+        Returns:
+            tuple: (정규화 데이터, 요약 통계, 출력 경로)
+        """
+        return (
+            self.df_time_normalized,
+            getattr(self, 'summary', None),
+            self.output_path
+        )
 
 
 if __name__ == "__main__":
@@ -285,13 +290,16 @@ if __name__ == "__main__":
     print("\n🚀 FOCUS 형식 데이터 → 시간 정규화")
 
     normalizer = TimeNormalizer('config/focus_config.yaml')
-
-    df_time_normalized, summary, output_path = normalizer.run()
+    normalizer.run()
     
-    # 시간별 요약
-    print(f"시간 정규화 완료!")
-    print(f"\n📂 출력 파일: {output_path}")
-    print(f"\n시간별 요약:")
-    print(summary)
+    # 결과 조회
+    df_time_normalized, summary, output_path = normalizer.get_results()
+    
+    print(f"\n✅ 시간 정규화 완료!")
+    print(f"📂 출력 파일: {output_path}")
+    
+    if summary is not None:
+        print(f"\n시간별 요약 (처음 10행):")
+        print(summary.head(10))
 
     

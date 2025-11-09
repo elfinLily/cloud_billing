@@ -12,7 +12,7 @@ from .focus_patterns import (
     UnusedResourceDetector
 )
 from .gcp_to_focus import GCPToFocusConverter
-from .extract_aws_from_focus import AWSExtractor
+from ..data_collection.extract_aws_from_focus import AWSExtractor
 from .analyze_all_focus import AllFocusAnalyzer
 __all__ = [
     # 기본 모듈
