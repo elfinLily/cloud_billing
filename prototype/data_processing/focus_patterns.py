@@ -29,10 +29,10 @@ class OverProvisioningDetector(PipelineBase):
         데이터 로드
 
         Args:
-            df: FOCUS DataFrame (None이면 기존 self.df 사용)
+            df: FOCUS DataFrame
 
         Returns:
-            self: 체이닝 지원
+            self
         """
         if df is not None:
             self.df = df.copy()
@@ -48,7 +48,7 @@ class OverProvisioningDetector(PipelineBase):
         과다 프로비저닝 탐지 (process는 detect 호출)
 
         Returns:
-            self: 체이닝 지원
+            self
         """
         self.result = self.detect()
         return self
@@ -62,7 +62,7 @@ class OverProvisioningDetector(PipelineBase):
             output_path: 저장 경로 (None이면 저장 안 함)
 
         Returns:
-            self: 체이닝 지원
+            self
         """
         if output_path and self.result is not None and len(self.result) > 0:
             self.result.to_csv(output_path, index=False)
@@ -164,13 +164,13 @@ class OverProvisioningDetector(PipelineBase):
 
     def run(self, df=None):
         """
-        전체 프로세스 실행 (체이닝)
+        전체 프로세스 실행
 
         Args:
-            df: FOCUS DataFrame (선택)
+            df: FOCUS DataFrame
 
         Returns:
-            self: 체이닝 지원
+            self
         """
         if df is not None:
             self.load(df)
@@ -203,7 +203,7 @@ class UnusedResourceDetector(PipelineBase):
             self.df = df.copy() if df is not None else None
             self.result = None
 
-        def load(self, df=None):
+    def load(self, df=None):
         """데이터 로드"""
         if df is not None:
             self.df = df.copy()
