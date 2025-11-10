@@ -17,10 +17,6 @@ class TimeNormalizer(PipelineBase):
     주요 기능:
     - ChargePeriodStart ~ ChargePeriodEnd 사이의 모든 시간(hour)을 개별 레코드로 확장
     - 각 시간 슬롯에 원본 데이터의 비용을 시간 비율로 분배
-    
-    사용 예시:
-        normalizer = TimeNormalize()
-        expanded_df = normalizer.normalize()
     """
     
     def __init__(self, config_path='config/focus_config.yaml'):
@@ -139,12 +135,11 @@ class TimeNormalizer(PipelineBase):
         
         Returns:
             DataFrame: 시간별로 확장된 데이터
-                새로운 컬럼:
                 - HourlyTimestamp: 각 시간 슬롯의 시작 시각
                 - OriginalDurationHours: 원본 레코드의 총 시간
                 - HourlyCost: 시간당 분배된 비용 (distribute_cost=True인 경우)
         
-        처리 방식:
+        Steps:
             1. 각 레코드의 Start ~ End 시간 차이 계산
             2. 시간 차이를 1시간 단위로 분해
             3. 각 시간 슬롯을 개별 행으로 생성
