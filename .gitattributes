@@ -4,3 +4,5 @@
 *.zip filter=lfs diff=lfs merge=lfs -text
 prototype/data/processed/time_normalized.csv.zip filter=lfs diff=lfs merge=lfs -text
 prototype/data/processed/resource_hourly_grouped.csv filter=lfs diff=lfs merge=lfs -text
+prototype/data/processed/hourly_aggregated.csv filter=lfs diff=lfs merge=lfs -text
+prototype/data/processed/resource_grouped.csv filter=lfs diff=lfs merge=lfs -text

@@ -10,7 +10,8 @@ data:
   output_dir: "results"
   focus_folder: "data/processed"
   time_normalized_output: "data/processed/time_normalized.csv"
-  resource_grouped_output: "data/processed/resource_hourly_grouped.csv"
+  resource_grouped_output: "data/processed/resource_grouped.csv"
+  hourly_aggregated_output: "data/processed/hourly_aggregated.csv" 
   detected_patterns_output: "results/detected_patterns.csv.gz" # 최종 결과 저장
 
 # 클라우드 필터 설정
