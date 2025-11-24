@@ -141,15 +141,31 @@ class ResourceGrouper(PipelineBase):
             'ServiceName'
         ]
         
-        # Region 컬럼이 있으면 추가
-        # if 'Region' in self.df.columns:
-        #     group_cols.append('Region')
-        
-        # 그룹화 및 집계
         self.df_grouped = self.df.group_by(group_cols).agg([
             pl.col('HourlyCost').sum().alias('TotalHourlyCost'),
             pl.count().alias('RecordCount')
-        ]).sort(['BillingAccountId', 'ResourceId', 'HourlyTimestamp'])
+        ])
+
+        # # 그룹화 및 집계
+        # agg_exprs = [
+        #     pl.col('HourlyCost').sum().alias('TotalHourlyCost'),
+        #     pl.count().alias('RecordCount')
+        # ]
+
+        # # GCP: SimulatedCPUUsage, SimulatedMemoryUsage 평균
+        # if 'SimulatedCPUUsage' in self.df.columns:
+        #     agg_exprs.extend([
+        #         pl.col('SimulatedCPUUsage').mean().alias('AvgCPUUsage'),
+        #         pl.col('SimulatedMemoryUsage').mean().alias('AvgMemoryUsage')
+        #     ])
+
+        # # AWS: ConsumedQuantity 합계
+        # if 'ConsumedQuantity' in self.df.columns:
+        #     agg_exprs.append(
+        #         pl.col('ConsumedQuantity').sum().alias('TotalConsumedQuantity')
+        #     )
+
+        self.df_grouped = self.df.group_by(group_cols).agg(agg_exprs)
         
         self.print_success(f"그룹화 완료: {len(self.df_grouped):,}건")
         print(f"   압축률: {len(self.df) / len(self.df_grouped):.2f}x")
