@@ -1,0 +1,55 @@
+# AWS → GCP 서비스 매칭 테이블
+# Transfer Learning에서 사용률 추정 시 활용
+
+mappings:
+  # === Compute (→ App Engine, Cloud Run) ===
+  Amazon Elastic Compute Cloud: App Engine
+  AWS Lambda: Cloud Run
+  Amazon Elastic Container Service: Cloud Run
+  Amazon Elastic Kubernetes Service: App Engine
+  Amazon EC2: App Engine
+  
+  # === Storage (→ Cloud Filestore) ===
+  Amazon Simple Storage Service: Cloud Filestore
+  Amazon Elastic Block Store: Cloud Filestore
+  Amazon Elastic File System: Cloud Filestore
+  Amazon S3: Cloud Filestore
+  
+  # === Database (→ Cloud SQL) ===
+  Amazon Relational Database Service: Cloud SQL
+  Amazon DynamoDB: Cloud SQL
+  Amazon ElastiCache: Cloud SQL
+  Amazon RDS: Cloud SQL
+  
+  # === Networking (→ Cloud Armor) ===
+  Amazon Virtual Private Cloud: Cloud Armor
+  Elastic Load Balancing: Cloud Armor
+  Amazon CloudFront: Cloud Armor
+  Amazon VPC: Cloud Armor
+  
+  # === Analytics (→ Cloud Pub/Sub, Cloud Dataflow) ===
+  Amazon Athena: Cloud Dataflow
+  Amazon EMR: Cloud Dataflow
+  Amazon Kinesis: Cloud Pub/Sub
+  
+  # === AI/ML (→ Dialogflow) ===
+  Amazon SageMaker: Dialogflow
+  Amazon Rekognition: Dialogflow
+  Amazon Comprehend: Dialogflow
+  
+  # === Monitoring (→ Cloud Monitoring) ===
+  AmazonCloudWatch: Cloud Monitoring
+  AWS CloudTrail: Cloud Monitoring
+  
+  # === Security (→ Secret Manager) ===
+  AWS Secrets Manager: Secret Manager
+  AWS KMS: Secret Manager
+  
+  # === Developer Tools (→ Cloud Tasks) ===
+  AWS Step Functions: Cloud Tasks
+  Amazon SQS: Cloud Tasks
+  
+  # === Container (→ Artifact Registry) ===
+  Amazon ECR: Artifact Registry
+  
+fallback_strategy: use_global_average

@@ -11,8 +11,11 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from data_processing.pipeline_base import PipelineBase
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+sys.path.insert(0, str(project_root / 'data_processing'))
+
+from pipeline_base import PipelineBase
 
 
 class UsageEstimator(PipelineBase):

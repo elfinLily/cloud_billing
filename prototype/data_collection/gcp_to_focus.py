@@ -117,8 +117,8 @@ class GCPToFocusConverter:
         self.df_focus['CommitmentDiscountType'] = None
         
         # 10. CPU/메모리 사용률
-        self.df_focus['CPUUsage'] = self.df_raw['CPU Utilization (%)'] / 100.0
-        self.df_focus['MemoryUsage'] = self.df_raw['Memory Utilization (%)'] / 100.0
+        self.df_focus['SimulatedCPUUsage'] = self.df_raw['CPU Utilization (%)'] / 100.0
+        self.df_focus['SimulatedMemoryUsage'] = self.df_raw['Memory Utilization (%)'] / 100.0
         
         # 11. 네트워크 데이터
         self.df_focus['NetworkInboundBytes'] = self.df_raw['Network Inbound Data (Bytes)']
