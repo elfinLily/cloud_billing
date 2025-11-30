@@ -16,3 +16,7 @@ prototype/data/processed/aws_focus.csv
 prototype/data/processed/gcp_focus_converted.csv
 
 prototype/data/processed/time_normalized.csv
+
+prototype/results/transfer_learning/models/
+
+prototype/results/transfer_learning/ml_predictions.csv

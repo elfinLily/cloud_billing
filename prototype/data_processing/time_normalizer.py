@@ -74,7 +74,7 @@ class TimeNormalizer(PipelineBase):
         print(f"\n✅ 로드 완료!")
         print(f"   📊 총 레코드: {len(self.df_all):,}건")
 
-        return self.df_all
+        return self
     
     def _validate_columns(self):
         """
@@ -202,6 +202,15 @@ class TimeNormalizer(PipelineBase):
 
         return self
     
+    def process(self):
+        """
+        PipelineBase 추상 메서드 구현
+        normalize()를 호출
+
+        Returns:
+            self
+        """
+        return self.normalize(distribute_cost=True)
     
     def get_hourly_summary(self):
         """

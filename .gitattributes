@@ -6,3 +6,5 @@ prototype/data/processed/time_normalized.csv.zip filter=lfs diff=lfs merge=lfs -
 prototype/data/processed/resource_hourly_grouped.csv filter=lfs diff=lfs merge=lfs -text
 prototype/data/processed/hourly_aggregated.csv filter=lfs diff=lfs merge=lfs -text
 prototype/data/processed/resource_grouped.csv filter=lfs diff=lfs merge=lfs -text
+prototype/results/transfer_learning/ml_overprovisioned_v2.csv filter=lfs diff=lfs merge=lfs -text
+prototype/results/transfer_learning/ml_predictions_v2.csv filter=lfs diff=lfs merge=lfs -text
