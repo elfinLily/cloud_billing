@@ -104,6 +104,12 @@ class ResourceGrouper(PipelineBase):
             pl.col('HourlyCost').cast(pl.Float64)
         ])
         
+        if 'SimulatedCPUUsage' in self.df.columns:
+            self.df = self.df.with_columns([
+                pl.col('SimulatedCPUUsage').cast(pl.Float64),
+                pl.col('SimulatedMemoryUsage').cast(pl.Float64)
+            ])
+
         self.print_success("타입 변환 완료")
         
         return self
@@ -141,25 +147,28 @@ class ResourceGrouper(PipelineBase):
             'ServiceName'
         ]
         
-        self.df_grouped = self.df.group_by(group_cols).agg([
-            pl.col('HourlyCost').sum().alias('TotalHourlyCost'),
-            pl.count().alias('RecordCount')
-        ])
-
-        # # 그룹화 및 집계
-        # agg_exprs = [
+        # self.df_grouped = self.df.group_by(group_cols).agg([
         #     pl.col('HourlyCost').sum().alias('TotalHourlyCost'),
         #     pl.count().alias('RecordCount')
-        # ]
+        # ])
 
-        # # GCP: SimulatedCPUUsage, SimulatedMemoryUsage 평균
-        # if 'SimulatedCPUUsage' in self.df.columns:
-        #     agg_exprs.extend([
-        #         pl.col('SimulatedCPUUsage').mean().alias('AvgCPUUsage'),
-        #         pl.col('SimulatedMemoryUsage').mean().alias('AvgMemoryUsage')
-        #     ])
+        # 그룹화 및 집계
+        agg_exprs = [
+            pl.col('HourlyCost').sum().alias('TotalHourlyCost'),
+            pl.count().alias('RecordCount')
+        ]
+        
+        if 'ResourceType' in self.df.columns:
+            group_cols.append('ResourceType')
 
-        # # AWS: ConsumedQuantity 합계
+        # GCP: SimulatedCPUUsage, SimulatedMemoryUsage 평균
+        if 'SimulatedCPUUsage' in self.df.columns:
+            agg_exprs.extend([
+                pl.col('SimulatedCPUUsage').mean().alias('AvgCPUUsage'),
+                pl.col('SimulatedMemoryUsage').mean().alias('AvgMemoryUsage')
+            ])
+
+        # AWS: ConsumedQuantity 합계
         # if 'ConsumedQuantity' in self.df.columns:
         #     agg_exprs.append(
         #         pl.col('ConsumedQuantity').sum().alias('TotalConsumedQuantity')

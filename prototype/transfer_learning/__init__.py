@@ -12,6 +12,8 @@ from .aws_overprovisioning_detector import AWSOverprovisioningDetector
 from .transfer_learning_visualizer import TransferLearningVisualizer
 from .validation_module import TransferLearningValidator
 from .ml_usage_predictor import MLUsagePredictor
+from .xgb_usage_predictor import XGBUsagePredictor
+from .ml_usage_classifier import MLUsageClassifier
 
 __all__ = [
     'GCPPatternLearner',
@@ -20,7 +22,9 @@ __all__ = [
     'AWSOverprovisioningDetector',
     'TransferLearningVisualizer',
     'TransferLearningValidator',
-    'MLUsagePredictor',  # 신규 추가
+    'MLUsagePredictor',
+    'XGBUsagePredictor',
+    'MLUsageClassifier',
 ]
 
 __version__ = '1.1.0'
