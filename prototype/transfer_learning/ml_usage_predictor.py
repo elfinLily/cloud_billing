@@ -20,6 +20,7 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
 import sys
+from sklearn.model_selection import RandomizedSearchCV
 
 # ============================================================
 # 프로젝트 루트 설정
@@ -86,7 +87,7 @@ class MLUsagePredictorV2(PipelineBase):
         # ============================================================
         # Feature 설정
         # ============================================================
-        self.categorical_cols = ['ServiceName']
+        self.categorical_cols = ['ServiceName', 'ResourceType']
         self.numerical_cols = ['TotalHourlyCost', 'HourOfDay', 'DayOfWeek']
         self.feature_cols = []
     
@@ -171,6 +172,11 @@ class MLUsagePredictorV2(PipelineBase):
             features['HourOfDay'] = 12
             features['DayOfWeek'] = 3
         
+        if 'ResourceType' in df.columns:
+            features['ResourceType'] = df['ResourceType'].fillna('Unknown')
+        else:
+            features['ResourceType'] = 'Unknown'
+
         return features
     
     
@@ -225,7 +231,51 @@ class MLUsagePredictorV2(PipelineBase):
         
         return X
     
-    
+    def _tune_hyperparameters(self, X_train, y_train, target_name='CPU'):
+        """
+        RandomizedSearchCV로 하이퍼파라미터 튜닝
+
+        Args:
+            X_train: 학습 Feature
+            y_train: 학습 Target
+            target_name: 'CPU' 또는 'Memory'
+
+        Returns:
+            best_model: 최적 모델
+            best_params: 최적 파라미터
+        """
+        print(f"\n   🔧 {target_name} 하이퍼파라미터 튜닝 중...")
+
+        param_dist = {
+            'n_estimators': [50, 100, 200, 300],
+            'max_depth': [5, 10, 15, 20, None],
+            'min_samples_split': [2, 5, 10, 20],
+            'min_samples_leaf': [1, 2, 5, 10],
+            'max_features': ['sqrt', 'log2', None]
+        }
+
+        base_model = RandomForestRegressor(random_state=42, n_jobs=-1)
+
+        search = RandomizedSearchCV(
+            estimator=base_model,
+            param_distributions=param_dist,
+            n_iter=20,  # 20개 조합 시도
+            cv=3,       # 3-fold CV
+            scoring='r2',
+            random_state=42,
+            n_jobs=-1,
+            verbose=1
+        )
+
+        search.fit(X_train, y_train)
+
+        print(f"\n   ✅ {target_name} 최적 파라미터:")
+        for param, value in search.best_params_.items():
+            print(f"      • {param}: {value}")
+        print(f"   ✅ Best CV R²: {search.best_score_:.4f}")
+
+        return search.best_estimator_, search.best_params_
+
     def process(self):
         """
         GCP 데이터로 ML 모델 학습
@@ -296,56 +346,107 @@ class MLUsagePredictorV2(PipelineBase):
         # ============================================================
         # 4. CPU 모델 학습
         # ============================================================
-        print(f"\n   4️⃣  CPU 모델 학습 중...")
-        
-        self.cpu_model = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=10,
-            min_samples_split=10,
-            min_samples_leaf=5,
+        # CPU 모델 하이퍼파라미터 튜닝
+        print(f"\n   🔧 CPU 하이퍼파라미터 튜닝 중...")
+        # 샘플링 (100만 건)
+        sample_size = min(5000000, len(X_train))
+        sample_idx = np.random.choice(len(X_train), sample_size, replace=False)
+        X_sample = X_train[sample_idx]
+        y_cpu_sample = y_cpu_train[sample_idx]
+
+        print(f"   • 샘플 크기: {sample_size:,}건 (전체 {len(X_train):,}건)")
+
+        param_dist = {
+            'n_estimators': [50, 100, 200],
+            'max_depth': [5, 10, 15, 20],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 5],
+            'max_features': ['sqrt', 'log2']
+        }
+
+
+        base_model = RandomForestRegressor(random_state=42, n_jobs=-1)
+
+        cpu_search = RandomizedSearchCV(
+            estimator=base_model,
+            param_distributions=param_dist,
+            n_iter=15,
+            cv=3,
+            scoring='r2',
             random_state=42,
-            n_jobs=-1
+            n_jobs=-1,
+            verbose=1
         )
+
+        cpu_search.fit(X_sample, y_cpu_sample)
+
+        # self.cpu_model = cpu_search.best_estimator_
+
+        print(f"\n   ✅ CPU 최적 파라미터:")
+        for param, value in cpu_search.best_params_.items():
+            print(f"      • {param}: {value}")
+        print(f"   ✅ CPU Best CV R²: {cpu_search.best_score_:.4f}")
+
+        # 최적 파라미터로 전체 데이터 학습
+        print(f"\n   🔄 최적 파라미터로 전체 데이터 학습 중...")
+        self.cpu_model = RandomForestRegressor(**cpu_search.best_params_, random_state=42, n_jobs=-1)
         self.cpu_model.fit(X_train, y_cpu_train)
-        
-        # CPU 모델 평가
-        y_cpu_pred = self.cpu_model.predict(X_test)
-        cpu_mae = mean_absolute_error(y_cpu_test, y_cpu_pred)
-        cpu_r2 = r2_score(y_cpu_test, y_cpu_pred)
-        
-        print(f"      ✅ CPU MAE: {cpu_mae*100:.2f}%")
-        print(f"      ✅ CPU R²: {cpu_r2:.4f}")
         
         # ============================================================
         # 5. Memory 모델 학습
         # ============================================================
-        print(f"\n   5️⃣  Memory 모델 학습 중...")
-        
-        self.memory_model = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=10,
-            min_samples_split=10,
-            min_samples_leaf=5,
+        print(f"\n5️⃣ Memory 하이퍼파라미터 튜닝 중...")
+
+        y_mem_sample = y_mem_train[sample_idx]
+
+        mem_search = RandomizedSearchCV(
+            estimator=base_model,
+            param_distributions=param_dist,
+            n_iter=15,
+            cv=3,
+            scoring='r2',
             random_state=42,
-            n_jobs=-1
+            n_jobs=-1,
+            verbose=1
         )
+
+        mem_search.fit(X_sample, y_mem_sample)
+        
+        #self.memory_model = mem_search.best_estimator_
+
+        print(f"\n   ✅ Memory 최적 파라미터:")
+        for param, value in mem_search.best_params_.items():
+            print(f"      • {param}: {value}")
+        print(f"   ✅ Memory Best CV R²: {mem_search.best_score_:.4f}")
+
+        # 최적 파라미터로 전체 데이터 학습
+        print(f"\n   🔄 최적 파라미터로 전체 데이터 학습 중...")
+        self.memory_model = RandomForestRegressor(**mem_search.best_params_, random_state=42, n_jobs=-1)
         self.memory_model.fit(X_train, y_mem_train)
         
-        # Memory 모델 평가
-        y_mem_pred = self.memory_model.predict(X_test)
-        mem_mae = mean_absolute_error(y_mem_test, y_mem_pred)
-        mem_r2 = r2_score(y_mem_test, y_mem_pred)
-        
-        print(f"      ✅ Memory MAE: {mem_mae*100:.2f}%")
-        print(f"      ✅ Memory R²: {mem_r2:.4f}")
         
         # ============================================================
         # 6. Feature 중요도 출력
         # ============================================================
-        print(f"\n   📊 Feature 중요도 (CPU):")
+        # 모델 평가
+        print(f"\n6️⃣ 모델 평가 중...")
+
+        y_cpu_pred = self.cpu_model.predict(X_test)
+        cpu_mae = mean_absolute_error(y_cpu_test, y_cpu_pred)
+        cpu_r2 = r2_score(y_cpu_test, y_cpu_pred)
+
+        print(f"   ✅ CPU MAE: {cpu_mae*100:.2f}%")
+        print(f"   ✅ CPU R²: {cpu_r2:.4f}")
+
+        y_mem_pred = self.memory_model.predict(X_test)
+        mem_mae = mean_absolute_error(y_mem_test, y_mem_pred)
+        mem_r2 = r2_score(y_mem_test, y_mem_pred)
+
+        print(f"   ✅ Memory MAE: {mem_mae*100:.2f}%")
+        print(f"   ✅ Memory R²: {mem_r2:.4f}")
+
+        # Feature 중요도
         importances = self.cpu_model.feature_importances_
-        for i, col in enumerate(self.feature_cols):
-            print(f"      • {col}: {importances[i]*100:.1f}%")
         
         # ============================================================
         # 7. 모델 저장
