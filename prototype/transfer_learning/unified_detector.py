@@ -99,7 +99,21 @@ class UnifiedOverProvisioningDetector(PipelineBase):
     - TotalHourlyCost: 시간당 비용
     - PotentialSavings: 예상 절감액
     """
-    
+
+    # ============================================================
+    # Compute 서비스 키워드 (과다 프로비저닝 탐지 대상)
+    # ============================================================
+    COMPUTE_KEYWORDS = [
+        'compute engine', 'cloud run', 'app engine', 'cloud functions',
+        'kubernetes engine', 'gke',
+        'ec2', 'elastic compute', 'lambda', 'ecs', 'fargate', 'eks',
+        'elastic beanstalk',
+        'compute', 'vm', 'instance', 'container', 'function'
+    ]
+
+    # 연속 시간 임계값 (24시간)
+    MIN_CONSECUTIVE_HOURS = 24
+
     # ============================================================
     # 서비스 → UnifiedCategory 매핑 (ML 예측용)
     # ============================================================
@@ -195,6 +209,53 @@ class UnifiedOverProvisioningDetector(PipelineBase):
             'aws': {'total': 0, 'over_provisioned': 0}
         }
     
+    def _is_compute_service(self, service_name):
+        """
+        Compute 서비스인지 확인
+        
+        Args:
+            service_name: 서비스명
+        
+        Returns:
+            bool: Compute 서비스 여부
+        """
+        if pd.isna(service_name):
+            return False
+        
+        service_lower = str(service_name).lower()
+        
+        for keyword in self.COMPUTE_KEYWORDS:
+            if keyword in service_lower:
+                return True
+        
+        return False
+    
+    def _find_consecutive_hours(self, df, flag_col):
+        """
+        연속 True인 최대 시간 찾기
+        
+        Args:
+            df: 시간순 정렬된 DataFrame
+            flag_col: 체크할 boolean 컬럼명
+        
+        Returns:
+            int: 최대 연속 시간
+        """
+        if flag_col not in df.columns or len(df) == 0:
+            return 0
+        
+        flags = df[flag_col].values
+        max_consecutive = 0
+        current_consecutive = 0
+        
+        for flag in flags:
+            if flag:
+                current_consecutive += 1
+                max_consecutive = max(max_consecutive, current_consecutive)
+            else:
+                current_consecutive = 0
+        
+        return max_consecutive
     
     def load(self):
         """
@@ -231,7 +292,7 @@ class UnifiedOverProvisioningDetector(PipelineBase):
     
     def _separate_by_provider(self):
         """
-        ProviderName으로 GCP/AWS 데이터 분리
+        ProviderName으로 GCP/AWS 데이터 분리 + Compute만 필터링
         """
         print(f"\n   🔄 클라우드 제공자별 분리...")
         
@@ -242,21 +303,21 @@ class UnifiedOverProvisioningDetector(PipelineBase):
             self.df_aws = pd.DataFrame()
             return
         
-        # GCP 필터
-        gcp_keywords = ['GCP', 'Google', 'google']
-        gcp_mask = self.df['ProviderName'].str.contains(
-            '|'.join(gcp_keywords), case=False, na=False
-        )
-        self.df_gcp = self.df[gcp_mask].copy()
+        # Compute 서비스만 필터링
+        self.df['IsCompute'] = self.df['ServiceName'].apply(self._is_compute_service)
+        df_compute = self.df[self.df['IsCompute']].copy()
         
-        # AWS 필터
-        aws_keywords = ['AWS', 'Amazon', 'amazon']
-        aws_mask = self.df['ProviderName'].str.contains(
-            '|'.join(aws_keywords), case=False, na=False
-        )
-        self.df_aws = self.df[aws_mask].copy()
+        compute_pct = len(df_compute) / len(self.df) * 100 if len(self.df) > 0 else 0
+        print(f"   📊 Compute 필터링: {len(df_compute):,}건 / {len(self.df):,}건 ({compute_pct:.1f}%)")
         
-        # 통계 저장
+        # GCP/AWS 분리
+        gcp_mask = df_compute['ProviderName'].str.lower().str.contains('gcp|google', na=False)
+        aws_mask = df_compute['ProviderName'].str.lower().str.contains('aws|amazon', na=False)
+        
+        self.df_gcp = df_compute[gcp_mask].copy()
+        self.df_aws = df_compute[aws_mask].copy()
+        
+        # 통계 업데이트
         self.stats['gcp']['total'] = len(self.df_gcp)
         self.stats['aws']['total'] = len(self.df_aws)
         
@@ -344,22 +405,18 @@ class UnifiedOverProvisioningDetector(PipelineBase):
     
     def _detect_gcp(self):
         """
-        GCP 과다 프로비저닝 탐지 (직접 임계값 비교)
+        GCP 과다 프로비저닝 탐지 (연속 24시간 체크)
         
         조건:
-        - AvgCPUUsage < 30% → CPU 과다 프로비저닝
-        - AvgMemoryUsage < 30% → Memory 과다 프로비저닝
-        
-        Returns:
-            DataFrame: 탐지된 과다 프로비저닝 리소스
+        - AvgCPUUsage < 30% 연속 24시간 → CPU 과다 프로비저닝
+        - AvgMemoryUsage < 30% 연속 24시간 → Memory 과다 프로비저닝
         """
-        print(f"\n   🔍 [GCP] 직접 임계값 비교...")
+        print(f"\n   🔍 [GCP] 연속 {self.MIN_CONSECUTIVE_HOURS}시간 저사용률 체크...")
         print(f"      • CPU 임계값: < {self.cpu_threshold*100:.0f}%")
         print(f"      • Memory 임계값: < {self.memory_threshold*100:.0f}%")
         
         df = self.df_gcp.copy()
         
-        # 사용률 컬럼 확인
         cpu_col = 'AvgCPUUsage'
         mem_col = 'AvgMemoryUsage'
         
@@ -367,152 +424,136 @@ class UnifiedOverProvisioningDetector(PipelineBase):
             self.print_warning(f"GCP 데이터에 {cpu_col} 없음")
             return pd.DataFrame()
         
-        # 숫자 변환
+        # 타입 변환
+        df['HourlyTimestamp'] = pd.to_datetime(df['HourlyTimestamp'])
         df[cpu_col] = pd.to_numeric(df[cpu_col], errors='coerce').fillna(0)
         df[mem_col] = pd.to_numeric(df[mem_col], errors='coerce').fillna(0)
         
-        # 과다 프로비저닝 판정
-        cpu_over = df[cpu_col] < self.cpu_threshold
-        mem_over = df[mem_col] < self.memory_threshold
-        is_over = cpu_over | mem_over
+        # 저사용률 플래그
+        df['CPULow'] = df[cpu_col] < self.cpu_threshold
+        df['MemoryLow'] = df[mem_col] < self.memory_threshold
         
-        df_over = df[is_over].copy()
+        # ResourceId별 연속 저사용률 체크
+        over_provisioned = []
+        print(f"      📊 GCP 리소스 수: {df['ResourceId'].nunique():,}개")
         
-        # 결과 컬럼 추가
-        df_over['DetectionMethod'] = 'Direct'
-        df_over['CPUStatus'] = np.where(
-            df_over[cpu_col] < self.cpu_threshold,
-            'OverProvisioned', 'Normal'
-        )
-        df_over['MemoryStatus'] = np.where(
-            df_over[mem_col] < self.memory_threshold,
-            'OverProvisioned', 'Normal'
-        )
-        df_over['CPUValue'] = df_over[cpu_col].apply(lambda x: f"{x*100:.1f}%")
-        df_over['MemoryValue'] = df_over[mem_col].apply(lambda x: f"{x*100:.1f}%")
-        
-        # 예상 절감액 계산 (낭비 비율 기반)
-        cost_col = 'TotalHourlyCost'
-        if cost_col in df_over.columns:
-            df_over[cost_col] = pd.to_numeric(df_over[cost_col], errors='coerce').fillna(0)
+        grouped = df.sort_values('HourlyTimestamp').groupby('ResourceId')
+
+        for i, (resource_id, resource_df) in enumerate(grouped):
+            if (i + 1) % 1000 == 0:
+                print(f"         진행: {i+1:,}개 처리...")
             
-            # 낭비 비율 = 1 - 실제 사용률
-            cpu_waste = 1 - df_over[cpu_col]
-            mem_waste = 1 - df_over[mem_col]
-            avg_waste = (cpu_waste + mem_waste) / 2
+            cpu_consecutive = self._find_consecutive_hours(resource_df, 'CPULow')
+            mem_consecutive = self._find_consecutive_hours(resource_df, 'MemoryLow')
             
-            df_over['WasteRatio'] = avg_waste
-            df_over['PotentialSavings'] = df_over[cost_col] * avg_waste
+            if cpu_consecutive >= self.MIN_CONSECUTIVE_HOURS or mem_consecutive >= self.MIN_CONSECUTIVE_HOURS:
+                last_record = resource_df.iloc[-1].to_dict()
+                last_record['ConsecutiveCPUHours'] = cpu_consecutive
+                last_record['ConsecutiveMemoryHours'] = mem_consecutive
+                last_record['DetectionMethod'] = 'Direct_Consecutive'
+                last_record['CPUStatus'] = 'OverProvisioned' if cpu_consecutive >= self.MIN_CONSECUTIVE_HOURS else 'Normal'
+                last_record['MemoryStatus'] = 'OverProvisioned' if mem_consecutive >= self.MIN_CONSECUTIVE_HOURS else 'Normal'
+                last_record['CPUValue'] = f"{resource_df[cpu_col].mean()*100:.1f}%"
+                last_record['MemoryValue'] = f"{resource_df[mem_col].mean()*100:.1f}%"
+                
+                over_provisioned.append(last_record)
+        
+        if over_provisioned:
+            result = pd.DataFrame(over_provisioned)
+            
+            # 비용 계산
+            if 'TotalHourlyCost' in result.columns:
+                result['TotalHourlyCost'] = pd.to_numeric(result['TotalHourlyCost'], errors='coerce').fillna(0)
+                result['WasteRatio'] = 0.7  # 과다 프로비저닝 = 약 70% 낭비 가정
+                result['PotentialSavings'] = result['TotalHourlyCost'] * result['WasteRatio']
+            
+            self.stats['gcp']['over_provisioned'] = len(result)
+            print(f"      ✅ 탐지: {len(result):,}건")
+            return result
         else:
-            df_over['WasteRatio'] = 0
-            df_over['PotentialSavings'] = 0
-        
-        # 통계 저장
-        self.stats['gcp']['over_provisioned'] = len(df_over)
-        
-        print(f"      ✅ 탐지: {len(df_over):,}건 / {len(self.df_gcp):,}건")
-        print(f"         ({len(df_over)/len(self.df_gcp)*100:.1f}%)")
-        
-        return df_over
+            print(f"      ℹ️ 연속 {self.MIN_CONSECUTIVE_HOURS}시간 이상 저사용률 없음")
+            return pd.DataFrame()
     
     
     def _detect_aws(self):
         """
-        AWS 과다 프로비저닝 탐지 (ML Classification 기반)
+        AWS 과다 프로비저닝 탐지 (ML + 연속 24시간 체크)
         
         조건:
-        - PredictedCPUClass == 'Low' → CPU 과다 프로비저닝
-        - PredictedMemoryClass == 'Low' → Memory 과다 프로비저닝
-        
-        Returns:
-            DataFrame: 탐지된 과다 프로비저닝 리소스
+        - PredictedCPUClass = 'Low' 연속 24시간 → CPU 과다
+        - PredictedMemoryClass = 'Low' 연속 24시간 → Memory 과다
         """
-        print(f"\n   🔍 [AWS] ML Classification 기반 탐지...")
-        print(f"      • 모델: RandomForestClassifier (97% Accuracy)")
-        print(f"      • 기준: 'Low' 등급 → 과다 프로비저닝")
+        print(f"\n   🔍 [AWS] ML 예측 + 연속 {self.MIN_CONSECUTIVE_HOURS}시간 체크...")
         
         df = self.df_aws.copy()
         
-        # ============================================================
         # Feature 준비
-        # ============================================================
         df = self._prepare_features(df)
         
-        # Feature 인코딩
-        X = self._encode_features(df)
-        
-        if X is None or len(X) == 0:
-            self.print_warning("Feature 인코딩 실패")
+        # ML 예측
+        try:
+            X = self._encode_features(df)
+            if X is None:
+                return pd.DataFrame()
+            
+            cpu_pred = self.class_encoder.inverse_transform(self.cpu_model.predict(X))
+            mem_pred = self.class_encoder.inverse_transform(self.memory_model.predict(X))
+            
+            df['PredictedCPUClass'] = cpu_pred
+            df['PredictedMemoryClass'] = mem_pred
+            
+        except Exception as e:
+            self.print_error(f"ML 예측 실패: {e}")
             return pd.DataFrame()
         
-        # ============================================================
-        # ML 예측
-        # ============================================================
-        print(f"      🔄 ML 예측 중...")
+        # 타입 변환
+        df['HourlyTimestamp'] = pd.to_datetime(df['HourlyTimestamp'])
         
-        cpu_pred_encoded = self.cpu_model.predict(X)
-        mem_pred_encoded = self.memory_model.predict(X)
+        # Low 등급 플래그
+        df['CPULow'] = df['PredictedCPUClass'] == 'Low'
+        df['MemoryLow'] = df['PredictedMemoryClass'] == 'Low'
         
-        # 인코딩 → 등급 변환
-        cpu_pred = self.class_encoder.inverse_transform(cpu_pred_encoded)
-        mem_pred = self.class_encoder.inverse_transform(mem_pred_encoded)
-        
-        df['PredictedCPUClass'] = cpu_pred
-        df['PredictedMemoryClass'] = mem_pred
-        
-        # 등급 분포 출력
-        print(f"\n      📊 예측 등급 분포:")
-        print(f"         CPU:")
-        for cls in ['Low', 'Medium', 'High']:
-            cnt = (cpu_pred == cls).sum()
-            print(f"            • {cls}: {cnt:,}건 ({cnt/len(df)*100:.1f}%)")
-        print(f"         Memory:")
-        for cls in ['Low', 'Medium', 'High']:
-            cnt = (mem_pred == cls).sum()
-            print(f"            • {cls}: {cnt:,}건 ({cnt/len(df)*100:.1f}%)")
-        
-        # ============================================================
-        # 과다 프로비저닝 판정 (Low 등급)
-        # ============================================================
-        cpu_over = df['PredictedCPUClass'] == 'Low'
-        mem_over = df['PredictedMemoryClass'] == 'Low'
-        is_over = cpu_over | mem_over
-        
-        df_over = df[is_over].copy()
-        
-        # 결과 컬럼 추가
-        df_over['DetectionMethod'] = 'ML_Classification'
-        df_over['CPUStatus'] = np.where(
-            df_over['PredictedCPUClass'] == 'Low',
-            'OverProvisioned', 'Normal'
-        )
-        df_over['MemoryStatus'] = np.where(
-            df_over['PredictedMemoryClass'] == 'Low',
-            'OverProvisioned', 'Normal'
-        )
-        df_over['CPUValue'] = df_over['PredictedCPUClass']
-        df_over['MemoryValue'] = df_over['PredictedMemoryClass']
-        
-        # 예상 절감액 계산
-        cost_col = 'TotalHourlyCost'
-        if cost_col in df_over.columns:
-            df_over[cost_col] = pd.to_numeric(df_over[cost_col], errors='coerce').fillna(0)
+        # ResourceId별 연속 Low 체크
+        over_provisioned = []
+
+        unique_resources = df['ResourceId'].unique()
+        total_resources = len(unique_resources)
+        print(f"      📊 AWS 리소스 수: {total_resources:,}개")
+        grouped = df.sort_values('HourlyTimestamp').groupby('ResourceId')
+
+        for i, (resource_id, resource_df) in enumerate(grouped):
+            if (i + 1) % 10000 == 0:
+                print(f"         진행: {i+1:,}개 처리...")
             
-            # Low 등급 → 약 50% 절감 가정
-            # (Low = 하위 25% 사용률 → 평균 ~12.5% → 87.5% 낭비)
-            df_over['WasteRatio'] = 0.5  # 보수적 추정
-            df_over['PotentialSavings'] = df_over[cost_col] * 0.5
+            cpu_consecutive = self._find_consecutive_hours(resource_df, 'CPULow')
+            mem_consecutive = self._find_consecutive_hours(resource_df, 'MemoryLow')
+            
+            if cpu_consecutive >= self.MIN_CONSECUTIVE_HOURS or mem_consecutive >= self.MIN_CONSECUTIVE_HOURS:
+                last_record = resource_df.iloc[-1].to_dict()
+                last_record['ConsecutiveCPUHours'] = cpu_consecutive
+                last_record['ConsecutiveMemoryHours'] = mem_consecutive
+                last_record['DetectionMethod'] = 'ML_Consecutive'
+                last_record['CPUStatus'] = 'OverProvisioned' if cpu_consecutive >= self.MIN_CONSECUTIVE_HOURS else 'Normal'
+                last_record['MemoryStatus'] = 'OverProvisioned' if mem_consecutive >= self.MIN_CONSECUTIVE_HOURS else 'Normal'
+                last_record['CPUValue'] = 'Low (ML)'
+                last_record['MemoryValue'] = 'Low (ML)'
+                
+                over_provisioned.append(last_record)
+        
+        if over_provisioned:
+            result = pd.DataFrame(over_provisioned)
+            
+            if 'TotalHourlyCost' in result.columns:
+                result['TotalHourlyCost'] = pd.to_numeric(result['TotalHourlyCost'], errors='coerce').fillna(0)
+                result['WasteRatio'] = 0.5
+                result['PotentialSavings'] = result['TotalHourlyCost'] * result['WasteRatio']
+            
+            self.stats['aws']['over_provisioned'] = len(result)
+            print(f"      ✅ 탐지: {len(result):,}건")
+            return result
         else:
-            df_over['WasteRatio'] = 0
-            df_over['PotentialSavings'] = 0
-        
-        # 통계 저장
-        self.stats['aws']['over_provisioned'] = len(df_over)
-        
-        print(f"\n      ✅ 탐지: {len(df_over):,}건 / {len(self.df_aws):,}건")
-        print(f"         ({len(df_over)/len(self.df_aws)*100:.1f}%)")
-        
-        return df_over
+            print(f"      ℹ️ 연속 {self.MIN_CONSECUTIVE_HOURS}시간 이상 Low 없음")
+            return pd.DataFrame()
     
     
     def _prepare_features(self, df):
