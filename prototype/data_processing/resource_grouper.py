@@ -146,11 +146,6 @@ class ResourceGrouper(PipelineBase):
             'HourlyTimestamp',
             'ServiceName'
         ]
-        
-        # self.df_grouped = self.df.group_by(group_cols).agg([
-        #     pl.col('HourlyCost').sum().alias('TotalHourlyCost'),
-        #     pl.count().alias('RecordCount')
-        # ])
 
         # 그룹화 및 집계
         agg_exprs = [
@@ -168,11 +163,27 @@ class ResourceGrouper(PipelineBase):
                 pl.col('SimulatedMemoryUsage').mean().alias('AvgMemoryUsage')
             ])
 
-        # AWS: ConsumedQuantity 합계
-        # if 'ConsumedQuantity' in self.df.columns:
-        #     agg_exprs.append(
-        #         pl.col('ConsumedQuantity').sum().alias('TotalConsumedQuantity')
-        #     )
+        # CommitmentDiscountStatus - 그룹키에 추가 (예약 미사용 탐지)
+        if 'CommitmentDiscountStatus' in self.df.columns:
+            group_cols.append('CommitmentDiscountStatus')
+        
+        # EffectiveCost 합계
+        if 'EffectiveCost' in self.df.columns:
+            agg_exprs.append(
+                pl.col('EffectiveCost').sum().alias('TotalEffectiveCost')
+            )
+        
+        # BilledCost 합계
+        if 'BilledCost' in self.df.columns:
+            agg_exprs.append(
+                pl.col('BilledCost').sum().alias('TotalBilledCost')
+            )
+        
+        # ConsumedQuantity 합계
+        if 'ConsumedQuantity' in self.df.columns:
+            agg_exprs.append(
+                pl.col('ConsumedQuantity').sum().alias('TotalConsumedQuantity')
+            )
 
         self.df_grouped = self.df.group_by(group_cols).agg(agg_exprs)
         

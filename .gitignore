@@ -18,3 +18,7 @@ prototype/data/processed/time_normalized.csv
 prototype/results/transfer_learning/models/
 prototype/results/transfer_learning/ml_predictions.csv
 prototype/data/processed/resource_grouped.csv
+
+prototype/data/processed/resource_grouped_origin.numbers
+
+prototype/results/gcp_unused.csv

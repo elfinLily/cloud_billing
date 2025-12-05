@@ -1,10 +1,10 @@
 {
   "gcp": {
-    "total": 17186488,
-    "over_provisioned": 8824439
+    "total": 2839675,
+    "over_provisioned": 165
   },
   "aws": {
-    "total": 2817522,
-    "over_provisioned": 2320313
+    "total": 1853715,
+    "over_provisioned": 3170
   }
 }

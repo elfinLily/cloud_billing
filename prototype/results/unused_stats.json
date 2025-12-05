@@ -1,0 +1,13 @@
+{
+  "total": 20004996,
+  "commitment_unused": {
+    "gcp": 0,
+    "aws": 5,
+    "total": 5
+  },
+  "zero_usage": {
+    "gcp": 1000,
+    "aws": 4758,
+    "total": 5758
+  }
+}
